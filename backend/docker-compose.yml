@@ -5,7 +5,7 @@ services:
     build: .
     container_name: laundry-backend
     ports:
-      - "5000:5000"
+      - "80:80"
     env_file:
       - .env
     depends_on:
@@ -21,5 +21,3 @@ services:
       - "6379:6379"
     restart: always
 
-volumes:
-  postgres_data:
