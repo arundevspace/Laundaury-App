@@ -58,3 +58,6 @@ logs/
 
 # MacOS-specific files
 .DS_Store
+
+# Ignore Alembic migration cache files
+migrations/versions/__pycache__/
