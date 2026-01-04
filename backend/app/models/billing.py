@@ -1,7 +1,7 @@
 import enum
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, Numeric
 from sqlalchemy.sql import func
-from .base import Base
+from app.models.base import Base ,db # Import Base from base.py
 
 class InvoiceType(enum.Enum):
     MONTHLY = "MONTHLY"

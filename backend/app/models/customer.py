@@ -1,7 +1,7 @@
 import enum
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Enum, Text, Numeric
 from sqlalchemy.sql import func
-from .base import Base
+from app.models.base import Base ,db # Import Base from base.py
 
 class CustomerType(enum.Enum):
     B2C = "B2C"

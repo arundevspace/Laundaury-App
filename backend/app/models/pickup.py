@@ -1,7 +1,7 @@
 import enum
 from sqlalchemy import Column, Integer, DateTime, ForeignKey, Enum, Text, Float
 from sqlalchemy.sql import func
-from .base import Base
+from app.models.base import Base ,db # Import Base from base.py
 
 class PickupStatus(enum.Enum):
     CREATED = "CREATED"

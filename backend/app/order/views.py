@@ -1,7 +1,6 @@
 from flask import Blueprint, request, jsonify
-from .models import Order, OrderItem, OrderStatus
-from app import db
-
+from app.models import Order, OrderItem, OrderStatus
+from app.models.base import Base ,db 
 order_bp = Blueprint('order', __name__)
 
 @order_bp.route('/orders', methods=['POST'])
@@ -35,3 +34,18 @@ def update_order(order_id):
 def list_orders():
     orders = Order.query.all()
     return jsonify([order.to_dict() for order in orders]), 200
+
+@order_bp.route('/orders/<int:order_id>', methods=['DELETE'])
+def delete_order(order_id):
+    """Deletes an order by its ID."""
+    order = Order.query.get_or_404(order_id)
+    db.session.delete(order)
+    db.session.commit()
+    return jsonify({'message': f'Order with ID {order_id} deleted successfully'}), 200
+
+
+@order_bp.route('/orders', methods=['GET'])
+def get_all_orders():
+    """Fetches all orders."""
+    orders = Order.query.all()
+    return jsonify([order.to_dict() for order in orders]), 200 
