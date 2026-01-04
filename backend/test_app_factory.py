@@ -29,7 +29,7 @@ class TestAppFactory:
         # Check that essential config values are set
         assert 'SQLALCHEMY_DATABASE_URI' in app.config
         assert 'SECRET_KEY' in app.config
-        assert app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] == False
+        assert app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] is False
     
     def test_database_initialized(self):
         """Test that database is initialized"""
@@ -47,8 +47,6 @@ class TestAppFactory:
         # Check that expected blueprints are registered
         assert 'user' in registered_blueprints, "user blueprint should be registered"
         assert 'order' in registered_blueprints, "order blueprint should be registered"
-        
-        print(f"Registered blueprints: {registered_blueprints}")
     
     def test_blueprint_url_prefixes(self):
         """Test that blueprints have correct URL prefixes"""
