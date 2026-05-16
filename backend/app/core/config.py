@@ -25,10 +25,8 @@ class Config:
     SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # -------------------------
-    # Redis
-    # -------------------------
-    REDIS_URL = os.getenv("REDIS_URL")
+    # Redis — Phase 2 only (job queues, caching). Not needed in Phase 1.
+    # REDIS_URL = os.getenv("REDIS_URL")
 
     # -------------------------
     # Security
