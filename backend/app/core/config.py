@@ -33,8 +33,9 @@ class Config:
     # -------------------------
     # Security
     # -------------------------
-    SECRET_KEY = os.getenv("SECRET_KEY")
-    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+    SECRET_KEY = os.getenv("SECRET_KEY", "laundry-secret-change-in-prod")
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "laundry-jwt-secret-change-in-prod")
+    JWT_ACCESS_TOKEN_EXPIRES = 28800  # 8 hours in seconds
 
     # -------------------------
     # Logging
