@@ -1,0 +1,1164 @@
+openapi: 3.0.3
+info:
+  title: Laundry Management System API
+  description: |
+    Backend API for the Laundry Management System.
+
+    ## Authentication
+    All endpoints except `POST /user/login` and `GET /health` require a Bearer JWT token.
+
+    1. Call `POST /user/login` with your credentials.
+    2. Copy the `access_token` from the response.
+    3. Click **Authorize** (top right) and paste: `Bearer <token>`
+
+    ## Phase 1 — Live
+    User & Customer management · JWT Auth · Order creation · Pickup + barcode tagging · Warehouse inward
+
+    ## Phase 2 — Planned
+    QC · Delivery · Billing & Invoicing
+  version: "1.0.0"
+  contact:
+    name: Laundry App Team
+    email: imarunkumar.contact@gmail.com
+
+servers:
+  - url: http://localhost:80
+    description: Local development
+  - url: https://api.laundry.example.com
+    description: Production (AWS)
+
+tags:
+  - name: Auth
+    description: Login and token management
+  - name: Users
+    description: Staff user management
+  - name: Customers
+    description: Customer (B2C / B2B) management
+  - name: Orders
+    description: Order lifecycle
+  - name: Pickup
+    description: Pickup scheduling and garment barcode tagging
+  - name: Inward
+    description: Warehouse receipt of pickup items
+  - name: Health
+    description: Service health
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+
+    LoginRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          example: admin_user
+        email:
+          type: string
+          format: email
+          example: admin@laundry.com
+        phone:
+          type: string
+          example: "9999999999"
+        password:
+          type: string
+          format: password
+          example: secret123
+      description: Provide one of username / email / phone plus password
+
+    LoginResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        token_type:
+          type: string
+          example: Bearer
+        user:
+          $ref: '#/components/schemas/User'
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        username:
+          type: string
+          example: ravi_warehouse
+        email:
+          type: string
+          example: ravi@laundry.com
+        phone:
+          type: string
+          example: "9876543210"
+        user_type:
+          type: string
+          enum: [ADMIN, WAREHOUSE, QC, DELIVERY, PICKUP, PROCESS, ORDER_TAKING]
+          example: WAREHOUSE
+        is_active:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+
+    CreateUserRequest:
+      type: object
+      required: [username, email, password, user_type]
+      properties:
+        username:
+          type: string
+          example: ravi_warehouse
+        email:
+          type: string
+          format: email
+          example: ravi@laundry.com
+        phone:
+          type: string
+          example: "9876543210"
+        password:
+          type: string
+          format: password
+          minLength: 6
+          example: secret123
+        user_type:
+          type: string
+          enum: [ADMIN, WAREHOUSE, QC, DELIVERY, PICKUP, PROCESS, ORDER_TAKING]
+          example: WAREHOUSE
+
+    Customer:
+      type: object
+      properties:
+        customer_id:
+          type: integer
+          example: 1
+        customer_type:
+          type: string
+          enum: [B2C, B2B]
+          example: B2B
+        name:
+          type: string
+          example: Hotel Grand Bangalore
+        phone:
+          type: string
+          example: "9123456780"
+        email:
+          type: string
+          example: procurement@hotelgrand.com
+        address:
+          type: string
+          example: 12 MG Road, Bangalore 560001
+        state_code:
+          type: string
+          example: KA
+        gstin:
+          type: string
+          example: 29ABCDE1234F1Z5
+        billing_cycle:
+          type: string
+          example: MONTHLY
+        tagging_enabled:
+          type: boolean
+          description: When true, each garment gets a permanent barcode tag on first inward
+          example: true
+        credit_limit:
+          type: number
+          example: 50000.00
+        is_active:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+
+    CreateCustomerRequest:
+      type: object
+      required: [name, phone, customer_type]
+      properties:
+        customer_type:
+          type: string
+          enum: [B2C, B2B]
+          example: B2B
+        name:
+          type: string
+          example: Hotel Grand Bangalore
+        phone:
+          type: string
+          example: "9123456780"
+        email:
+          type: string
+          example: procurement@hotelgrand.com
+        address:
+          type: string
+          example: 12 MG Road, Bangalore 560001
+        state_code:
+          type: string
+          example: KA
+        gstin:
+          type: string
+          example: 29ABCDE1234F1Z5
+        billing_cycle:
+          type: string
+          example: MONTHLY
+        tagging_enabled:
+          type: boolean
+          default: false
+        credit_limit:
+          type: number
+          example: 50000.00
+
+    OrderItem:
+      type: object
+      properties:
+        item_id:
+          type: integer
+        order_id:
+          type: integer
+        item_category:
+          type: string
+          example: Shirt
+        service_type:
+          type: string
+          enum: [WASH, IRON, WASH_IRON, DRYCLEAN, WASH_FOLD]
+        quantity:
+          type: integer
+          example: 5
+        unit_price:
+          type: number
+          example: 25.00
+        status:
+          type: string
+          example: PENDING
+
+    Order:
+      type: object
+      properties:
+        order_id:
+          type: integer
+          example: 1
+        order_number:
+          type: string
+          example: ORD-20260516-0001
+        customer_id:
+          type: integer
+          example: 1
+        status:
+          type: string
+          enum: [CREATED, IN_PROCESS, READY_FOR_DELIVERY, DELIVERED, BILLABLE, INVOICED]
+          example: CREATED
+        pickup_address:
+          type: string
+          example: 12 MG Road, Bangalore 560001
+        scheduled_pickup_date:
+          type: string
+          format: date-time
+        created_by:
+          type: integer
+          example: 1
+        notes:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        created_at:
+          type: string
+          format: date-time
+
+    CreateOrderRequest:
+      type: object
+      required: [customer_id, pickup_address, items]
+      properties:
+        customer_id:
+          type: integer
+          example: 1
+        pickup_address:
+          type: string
+          example: 12 MG Road, Bangalore 560001
+        delivery_address:
+          type: string
+        warehouse_id:
+          type: integer
+        scheduled_pickup_date:
+          type: string
+          format: date-time
+        notes:
+          type: string
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [item_category, service_type, quantity]
+            properties:
+              item_category:
+                type: string
+                example: Shirt
+              service_type:
+                type: string
+                enum: [WASH, IRON, WASH_IRON, DRYCLEAN, WASH_FOLD]
+                example: WASH_IRON
+              quantity:
+                type: integer
+                minimum: 1
+                example: 5
+
+    PickupItem:
+      type: object
+      properties:
+        pickup_item_id:
+          type: integer
+        pickup_id:
+          type: integer
+        barcode:
+          type: string
+          example: BAR-00123
+        item_category:
+          type: string
+          example: Shirt
+        service_type:
+          type: string
+          enum: [WASH, IRON, WASH_IRON, DRYCLEAN, WASH_FOLD]
+        tag_id:
+          type: integer
+          description: ID of the permanent ReusableItemTag assigned to this garment
+        notes:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Pickup:
+      type: object
+      properties:
+        pickup_id:
+          type: integer
+          example: 1
+        pickup_number:
+          type: string
+          example: PKP-20260516-0001
+        order_id:
+          type: integer
+          example: 1
+        customer_id:
+          type: integer
+        pickup_agent_id:
+          type: integer
+        status:
+          type: string
+          enum: [CREATED, ASSIGNED, IN_PROGRESS, COMPLETED, CANCELLED]
+          example: IN_PROGRESS
+        bag_count:
+          type: integer
+          example: 2
+        scheduled_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PickupItem'
+
+    ScanBarcodeRequest:
+      type: object
+      required: [barcode]
+      properties:
+        barcode:
+          type: string
+          example: BAR-00123
+          description: Printed barcode scanned from the garment tag
+        item_category:
+          type: string
+          example: Shirt
+        service_type:
+          type: string
+          enum: [WASH, IRON, WASH_IRON, DRYCLEAN, WASH_FOLD]
+          example: WASH_IRON
+        order_item_id:
+          type: integer
+        notes:
+          type: string
+
+    InwardItem:
+      type: object
+      properties:
+        inward_item_id:
+          type: integer
+        inward_id:
+          type: integer
+        barcode:
+          type: string
+          example: BAR-00123
+        tag_id:
+          type: integer
+        pickup_item_id:
+          type: integer
+        condition_notes:
+          type: string
+        is_received:
+          type: boolean
+        expected:
+          type: boolean
+          description: Whether this barcode was in the expected pickup items
+        items_received:
+          type: integer
+        items_expected:
+          type: integer
+        scanned_at:
+          type: string
+          format: date-time
+
+    Inward:
+      type: object
+      properties:
+        inward_id:
+          type: integer
+          example: 1
+        inward_number:
+          type: string
+          example: INW-20260516-0001
+        pickup_id:
+          type: integer
+          example: 1
+        warehouse_id:
+          type: integer
+          example: 1
+        inwarded_by:
+          type: integer
+          example: 3
+        total_items_expected:
+          type: integer
+          example: 8
+        total_items_received:
+          type: integer
+          example: 7
+        is_completed:
+          type: boolean
+          example: false
+        notes:
+          type: string
+        inward_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InwardItem'
+        created_at:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Invalid credentials
+
+security:
+  - BearerAuth: []
+
+paths:
+
+  # ── Health ──────────────────────────────────────────────────────────────────
+
+  /health:
+    get:
+      tags: [Health]
+      summary: Service health check
+      security: []
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: OK
+                  phase:
+                    type: string
+                    example: "1"
+
+  # ── Auth ────────────────────────────────────────────────────────────────────
+
+  /user/login:
+    post:
+      tags: [Auth]
+      summary: Login — get JWT token
+      description: |
+        Authenticate with **username**, **email**, or **phone** plus **password**.
+        Returns an 8-hour Bearer token. Include it in all subsequent requests as:
+        `Authorization: Bearer <token>`
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              byEmail:
+                summary: Login by email
+                value: {email: "admin@laundry.com", password: "secret123"}
+              byPhone:
+                summary: Login by phone
+                value: {phone: "9999999999", password: "secret123"}
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /user/me:
+    get:
+      tags: [Auth]
+      summary: Get current logged-in user
+      responses:
+        "200":
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  # ── Users ────────────────────────────────────────────────────────────────────
+
+  /user/users:
+    post:
+      tags: [Users]
+      summary: Create a staff user
+      description: Creates a new staff user. Requires ADMIN role in practice.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+        "409":
+          description: Email / phone already registered
+    get:
+      tags: [Users]
+      summary: List all active users
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+
+  /user/users/{user_id}:
+    get:
+      tags: [Users]
+      summary: Get user by ID
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        "404":
+          description: User not found
+
+  # ── Customers ─────────────────────────────────────────────────────────────────
+
+  /crm/states:
+    get:
+      tags: [Customers]
+      summary: List Indian states / UTs
+      security: []
+      responses:
+        "200":
+          description: State list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    state_code:
+                      type: string
+                      example: KA
+                    state_name:
+                      type: string
+                      example: Karnataka
+                    is_union_territory:
+                      type: boolean
+    post:
+      tags: [Customers]
+      summary: Add a state / UT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [state_code, state_name]
+              properties:
+                state_code:
+                  type: string
+                  example: KA
+                state_name:
+                  type: string
+                  example: Karnataka
+                is_union_territory:
+                  type: boolean
+                  default: false
+      responses:
+        "201":
+          description: State created
+
+  /crm/customers:
+    get:
+      tags: [Customers]
+      summary: List all active customers
+      responses:
+        "200":
+          description: Customer list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Customer'
+    post:
+      tags: [Customers]
+      summary: Create a customer (B2C or B2B)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCustomerRequest'
+            examples:
+              b2b:
+                summary: B2B hotel with tagging
+                value:
+                  customer_type: B2B
+                  name: Hotel Grand Bangalore
+                  phone: "9123456780"
+                  email: procurement@hotelgrand.com
+                  address: 12 MG Road, Bangalore
+                  state_code: KA
+                  gstin: 29ABCDE1234F1Z5
+                  billing_cycle: MONTHLY
+                  tagging_enabled: true
+                  credit_limit: 50000
+              b2c:
+                summary: B2C walk-in customer
+                value:
+                  customer_type: B2C
+                  name: Ramesh Kumar
+                  phone: "9876543210"
+                  state_code: KA
+      responses:
+        "201":
+          description: Customer created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        "409":
+          description: Phone already registered
+
+  /crm/customers/{customer_id}:
+    get:
+      tags: [Customers]
+      summary: Get customer by ID
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Customer details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+    put:
+      tags: [Customers]
+      summary: Update customer details
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCustomerRequest'
+      responses:
+        "200":
+          description: Customer updated
+    delete:
+      tags: [Customers]
+      summary: Deactivate customer (soft delete)
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Customer deactivated
+
+  # ── Orders ────────────────────────────────────────────────────────────────────
+
+  /orders/orders:
+    post:
+      tags: [Orders]
+      summary: Create a new laundry order
+      description: |
+        Creates an order with line items. Auto-generates order number `ORD-YYYYMMDD-XXXX`.
+        `created_by` is taken from the JWT token automatically.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+            example:
+              customer_id: 1
+              pickup_address: "12 MG Road, Bangalore 560001"
+              items:
+                - item_category: Shirt
+                  service_type: WASH_IRON
+                  quantity: 10
+                - item_category: Trouser
+                  service_type: WASH
+                  quantity: 5
+                - item_category: Saree
+                  service_type: DRYCLEAN
+                  quantity: 3
+      responses:
+        "201":
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        "400":
+          description: Validation error
+    get:
+      tags: [Orders]
+      summary: List orders
+      parameters:
+        - name: customer_id
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [CREATED, IN_PROCESS, READY_FOR_DELIVERY, DELIVERED, BILLABLE, INVOICED]
+      responses:
+        "200":
+          description: Order list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Order'
+
+  /orders/orders/{order_id}:
+    get:
+      tags: [Orders]
+      summary: Get order by ID
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+
+  /orders/orders/{order_id}/status:
+    patch:
+      tags: [Orders]
+      summary: Update order status
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [CREATED, IN_PROCESS, READY_FOR_DELIVERY, DELIVERED, BILLABLE, INVOICED]
+      responses:
+        "200":
+          description: Status updated
+
+  # ── Pickup ────────────────────────────────────────────────────────────────────
+
+  /orders/{order_id}/pickup:
+    post:
+      tags: [Pickup]
+      summary: Create a pickup task for an order
+      description: Order must be in CREATED status. Only one active pickup allowed per order.
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pickup_agent_id:
+                  type: integer
+                  description: User ID of the pickup rider (sets status to ASSIGNED)
+                pickup_address:
+                  type: string
+                  description: Override pickup address (defaults to order pickup_address)
+                scheduled_at:
+                  type: string
+                  format: date-time
+                notes:
+                  type: string
+      responses:
+        "201":
+          description: Pickup created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pickup'
+        "400":
+          description: Order not in CREATED status
+        "409":
+          description: Active pickup already exists
+
+  /pickups/{pickup_id}:
+    get:
+      tags: [Pickup]
+      summary: Get pickup by ID
+      parameters:
+        - name: pickup_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Pickup details with all scanned items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pickup'
+
+  /pickups/{pickup_id}/start:
+    post:
+      tags: [Pickup]
+      summary: Start the pickup (rider arrives at customer)
+      description: Moves status from CREATED/ASSIGNED → IN_PROGRESS.
+      parameters:
+        - name: pickup_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Pickup started
+        "400":
+          description: Cannot start from current status
+
+  /pickups/{pickup_id}/items:
+    post:
+      tags: [Pickup]
+      summary: Scan a garment barcode — one-time permanent tag assignment
+      description: |
+        Scan the barcode printed on a garment tag.
+
+        **First time** a barcode is seen → a permanent `ReusableItemTag` is created and linked to this garment.
+        **Subsequent orders** → the same tag is reused (garment history is preserved).
+
+        Duplicate scans in the same pickup are rejected (409).
+      parameters:
+        - name: pickup_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScanBarcodeRequest'
+            example:
+              barcode: BAR-00123
+              item_category: Shirt
+              service_type: WASH_IRON
+      responses:
+        "201":
+          description: Item tagged and added to pickup
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PickupItem'
+        "409":
+          description: Barcode already scanned in this pickup
+    get:
+      tags: [Pickup]
+      summary: List all scanned items in this pickup
+      parameters:
+        - name: pickup_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Scanned item list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PickupItem'
+
+  /pickups/{pickup_id}/complete:
+    post:
+      tags: [Pickup]
+      summary: Complete the pickup
+      description: |
+        Finalises the pickup. Requires at least one scanned item.
+        Automatically moves the linked Order to `IN_PROCESS`.
+      parameters:
+        - name: pickup_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                bag_count:
+                  type: integer
+                  description: Number of bags handed over
+                  example: 3
+      responses:
+        "200":
+          description: Pickup completed, order moved to IN_PROCESS
+        "400":
+          description: No items scanned or wrong status
+
+  # ── Inward ────────────────────────────────────────────────────────────────────
+
+  /inventory/inward:
+    get:
+      tags: [Inward]
+      summary: List inward sessions
+      parameters:
+        - name: warehouse_id
+          in: query
+          schema:
+            type: integer
+        - name: completed
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Inward session list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Inward'
+    post:
+      tags: [Inward]
+      summary: Open an inward session when pickup bags arrive at warehouse
+      description: |
+        Call this once when the bags arrive. Pickup must be in COMPLETED status.
+        Sets `total_items_expected` from the pickup item count.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pickup_id, warehouse_id]
+              properties:
+                pickup_id:
+                  type: integer
+                  example: 1
+                warehouse_id:
+                  type: integer
+                  example: 1
+                notes:
+                  type: string
+      responses:
+        "201":
+          description: Inward session opened
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Inward'
+        "400":
+          description: Pickup not COMPLETED
+        "409":
+          description: Open inward already exists for this pickup
+
+  /inventory/inward/{inward_id}:
+    get:
+      tags: [Inward]
+      summary: Get inward session details
+      parameters:
+        - name: inward_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Inward details with all scanned items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Inward'
+
+  /inventory/inward/{inward_id}/scan:
+    post:
+      tags: [Inward]
+      summary: Scan a barcode to mark a garment as received at warehouse
+      description: |
+        Returns:
+        - `expected: true` if barcode was in the expected pickup items
+        - `expected: false` if barcode is unknown (not from this pickup)
+        - Running `items_received` / `items_expected` counts
+      parameters:
+        - name: inward_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [barcode]
+              properties:
+                barcode:
+                  type: string
+                  example: BAR-00123
+                condition_notes:
+                  type: string
+                  description: Note any visible damage
+                  example: Small stain on collar
+                is_received:
+                  type: boolean
+                  default: true
+                  description: Set false if item is marked missing/damaged
+      responses:
+        "201":
+          description: Item received
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InwardItem'
+        "409":
+          description: Barcode already scanned in this inward
+
+  /inventory/inward/{inward_id}/complete:
+    post:
+      tags: [Inward]
+      summary: Finalise the inward session
+      description: |
+        Locks the inward. After this, no more scans are accepted.
+        Response includes `missing_items` count (expected − received).
+      parameters:
+        - name: inward_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Inward completed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Inward'
+                  - type: object
+                    properties:
+                      missing_items:
+                        type: integer
+                        example: 1

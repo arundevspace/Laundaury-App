@@ -1,7 +1,8 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager
 from dotenv import load_dotenv
+import os
 
 from app.models.base import db
 from app.core.config import Config
@@ -10,7 +11,7 @@ load_dotenv()
 
 
 def create_app():
-    flask_app = Flask(__name__)
+    flask_app = Flask(__name__, static_folder='static')
     flask_app.config.from_object(Config)
 
     # Init extensions
@@ -40,6 +41,39 @@ def create_app():
     flask_app.register_blueprint(processing_bp, url_prefix="/processing")
     flask_app.register_blueprint(sales_bp, url_prefix="/sales")
 
+    # ── Swagger UI ────────────────────────────────────────────────────────────
+    @flask_app.route("/openapi.yaml")
+    def openapi_spec():
+        return send_from_directory(flask_app.static_folder, "openapi.yaml",
+                                   mimetype="application/yaml")
+
+    @flask_app.route("/docs")
+    def swagger_ui():
+        return """<!DOCTYPE html>
+<html>
+<head>
+  <title>Laundry API Docs</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+</head>
+<body>
+<div id="swagger-ui"></div>
+<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+<script>
+  SwaggerUIBundle({
+    url: "/openapi.yaml",
+    dom_id: '#swagger-ui',
+    presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+    layout: "BaseLayout",
+    deepLinking: true,
+    persistAuthorization: true,
+  })
+</script>
+</body>
+</html>"""
+
+    # ── Health ────────────────────────────────────────────────────────────────
     @flask_app.route("/health", methods=["GET"])
     def health_check():
         return jsonify({"status": "OK", "phase": "1"}), 200
