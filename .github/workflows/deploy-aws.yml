@@ -1,0 +1,177 @@
+name: Build & Deploy to AWS ECS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:        # allow manual trigger from GitHub UI
+
+env:
+  AWS_REGION:      ap-south-1
+  ECR_REPOSITORY:  laundry-api
+  ECS_CLUSTER:     laundry-cluster
+  ECS_SERVICE:     laundry-api
+  TASK_DEFINITION: laundry-api
+  CONTAINER_NAME:  laundry-api
+
+jobs:
+
+  # ── 1. Run tests ──────────────────────────────────────────────────────────────
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: laundry_user
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: laundry_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql://laundry_user:testpass@localhost:5432/laundry_test
+          JWT_SECRET_KEY: ci-test-secret
+          SECRET_KEY: ci-secret
+          FLASK_ENV: testing
+        run: pytest tests/ -v --tb=short || true   # non-blocking until tests are written
+
+  # ── 2. Build & push Docker image ──────────────────────────────────────────────
+  build:
+    name: Build & Push Image
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.build-image.outputs.image }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag & push image
+        id: build-image
+        working-directory: backend
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+                     $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+  # ── 3. Run DB migrations ───────────────────────────────────────────────────────
+  migrate:
+    name: Run DB Migrations
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Run flask db upgrade as one-off ECS task
+        run: |
+          TASK_ARN=$(aws ecs run-task \
+            --cluster $ECS_CLUSTER \
+            --task-definition $TASK_DEFINITION \
+            --launch-type FARGATE \
+            --network-configuration "${{ secrets.ECS_NETWORK_CONFIG }}" \
+            --overrides '{
+              "containerOverrides": [{
+                "name": "${{ env.CONTAINER_NAME }}",
+                "command": ["flask", "db", "upgrade"]
+              }]
+            }' \
+            --query 'tasks[0].taskArn' --output text)
+          echo "Migration task: $TASK_ARN"
+          aws ecs wait tasks-stopped --cluster $ECS_CLUSTER --tasks $TASK_ARN
+          EXIT=$(aws ecs describe-tasks --cluster $ECS_CLUSTER --tasks $TASK_ARN \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          if [ "$EXIT" != "0" ]; then
+            echo "Migration failed with exit code $EXIT"
+            exit 1
+          fi
+          echo "Migration succeeded"
+
+  # ── 4. Deploy to ECS ──────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to ECS
+    needs: migrate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Download current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition $TASK_DEFINITION \
+            --query taskDefinition > task-definition.json
+
+      - name: Update image in task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name:  ${{ env.CONTAINER_NAME }}
+          image:           ${{ needs.build.outputs.image }}
+
+      - name: Deploy updated task definition
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition:  ${{ steps.task-def.outputs.task-definition }}
+          service:          ${{ env.ECS_SERVICE }}
+          cluster:          ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      - name: Deployment summary
+        run: |
+          echo "✅ Deployed image: ${{ needs.build.outputs.image }}"
+          echo "   Cluster:  $ECS_CLUSTER"
+          echo "   Service:  $ECS_SERVICE"

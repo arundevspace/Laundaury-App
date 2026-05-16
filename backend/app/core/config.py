@@ -25,16 +25,15 @@ class Config:
     SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # -------------------------
-    # Redis
-    # -------------------------
-    REDIS_URL = os.getenv("REDIS_URL")
+    # Redis — Phase 2 only (job queues, caching). Not needed in Phase 1.
+    # REDIS_URL = os.getenv("REDIS_URL")
 
     # -------------------------
     # Security
     # -------------------------
-    SECRET_KEY = os.getenv("SECRET_KEY")
-    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+    SECRET_KEY = os.getenv("SECRET_KEY", "laundry-secret-change-in-prod")
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "laundry-jwt-secret-change-in-prod")
+    JWT_ACCESS_TOKEN_EXPIRES = 28800  # 8 hours in seconds
 
     # -------------------------
     # Logging

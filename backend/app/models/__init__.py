@@ -1,29 +1,19 @@
-from .base import db  # Import the SQLAlchemy instance
-from .customer import Customer, StateUT
-from .order import Order, OrderItem,OrderStatus
+from .base import db
+from .customer import Customer, StateUT, CustomerType
+from .order import Order, OrderItem, OrderStatus
 from .billing import Invoice, Payment, CreditNote, Refund
 from .delivery import DeliveryTask, DeliveryBag
-from .pickup import PickupTask
-from .inventory import ItemType, PricingRule, ReusableItemTag, Bag, BagAssignment
+from .pickup import PickupTask, PickupItem, PickupStatus
+from .inventory import ItemType, PricingRule, ReusableItemTag, TagStatus, Bag, BagAssignment
+from .inward import Inward, InwardItem
 
-# Expose all models for easy import
 __all__ = [
     "db",
-    "Customer",
-    "StateUT",
-    "Order",
-    "OrderStatus",
-    "OrderItem",
-    "Invoice",
-    "Payment",
-    "CreditNote",
-    "Refund",
-    "DeliveryTask",
-    "DeliveryBag",
-    "PickupTask",
-    "ItemType",
-    "PricingRule",
-    "ReusableItemTag",
-    "Bag",
-    "BagAssignment",
+    "Customer", "StateUT", "CustomerType",
+    "Order", "OrderItem", "OrderStatus",
+    "Invoice", "Payment", "CreditNote", "Refund",
+    "DeliveryTask", "DeliveryBag",
+    "PickupTask", "PickupItem", "PickupStatus",
+    "ItemType", "PricingRule", "ReusableItemTag", "TagStatus", "Bag", "BagAssignment",
+    "Inward", "InwardItem",
 ]

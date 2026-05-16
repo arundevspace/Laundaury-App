@@ -1,6 +1,22 @@
 version: "3.9"
 
+# Local development only.
+# For production, see docs/aws-deployment.md
+
 services:
+  db:
+    image: postgres:15-alpine
+    container_name: laundry-db
+    environment:
+      POSTGRES_USER: laundry_user
+      POSTGRES_PASSWORD: laundry_pass
+      POSTGRES_DB: laundry_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
   backend:
     build: .
     container_name: laundry-backend
@@ -9,15 +25,13 @@ services:
     env_file:
       - .env
     depends_on:
-      - redis
+      - db
     volumes:
       - .:/app
     restart: always
 
-  redis:
-    image: redis:7
-    container_name: laundry-redis
-    ports:
-      - "6379:6379"
-    restart: always
+volumes:
+  postgres_data:
 
+# Redis is NOT used in Phase 1.
+# Add it back in Phase 2 when background jobs / caching are introduced.
