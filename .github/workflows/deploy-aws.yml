@@ -90,10 +90,11 @@ jobs:
             if [ ! -f "/opt/laundry/backend/.venv/bin/activate" ]; then
               echo "── Creating virtual environment (first time) ──"
               cd /opt/laundry/backend
+              rm -rf .venv
               python3 -m venv .venv
               source .venv/bin/activate
               pip install --upgrade pip --quiet
-              pip install -r requirements.txt --quiet
+              pip install -r requirements.txt
             else
               echo "── Virtual environment already exists, skipping ──"
             fi
