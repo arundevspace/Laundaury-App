@@ -64,6 +64,31 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
+      - name: Open ports 80 & 443 in Security Group (idempotent)
+        env:
+          AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION:    ${{ secrets.AWS_REGION }}
+        run: |
+          # Get security group ID from the EC2 instance public IP
+          SG_ID=$(aws ec2 describe-instances \
+            --filters "Name=ip-address,Values=${{ secrets.EC2_HOST }}" \
+            --query 'Reservations[0].Instances[0].SecurityGroups[0].GroupId' \
+            --output text)
+          echo "Security Group: $SG_ID"
+
+          # Open port 80 — ignore error if rule already exists
+          aws ec2 authorize-security-group-ingress \
+            --group-id "$SG_ID" \
+            --protocol tcp --port 80 --cidr 0.0.0.0/0 \
+            && echo "Port 80 opened" || echo "Port 80 already open"
+
+          # Open port 443 — ignore error if rule already exists
+          aws ec2 authorize-security-group-ingress \
+            --group-id "$SG_ID" \
+            --protocol tcp --port 443 --cidr 0.0.0.0/0 \
+            && echo "Port 443 opened" || echo "Port 443 already open"
+
       - name: First-time server setup (skipped if already done)
         env:
           DEPLOY_BRANCH: ${{ github.ref_name }}
@@ -138,7 +163,11 @@ jobs:
             echo "── Restarting service ──"
             sudo systemctl restart laundry
 
-            echo "── Health check ──"
+            echo "── Health check (internal) ──"
             sleep 3
-            curl -sf http://127.0.0.1:8000/health && echo "✅ Deploy successful"
+            curl -sf http://127.0.0.1:8000/health && echo "✅ Gunicorn healthy"
           ENDSSH
+
+      - name: Health check (public)
+        run: |
+          curl -sf http://${{ secrets.EC2_HOST }}/health && echo "✅ Public endpoint healthy"
