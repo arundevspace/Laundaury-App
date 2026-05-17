@@ -72,11 +72,8 @@ jobs:
             # ── Install system packages (idempotent) ──
             echo "── Checking system packages ──"
             sudo apt-get update -qq
-            sudo apt-get install -y -qq software-properties-common
-            sudo add-apt-repository -y ppa:deadsnakes/ppa
-            sudo apt-get update -qq
             sudo apt-get install -y -qq \
-              python3.10 python3.10-venv python3.10-dev \
+              python3-venv python3-dev python3-pip \
               libpq-dev gcc git nginx curl
 
             # ── Clone repo if not exists ──
@@ -93,7 +90,7 @@ jobs:
             if [ ! -f "/opt/laundry/backend/.venv/bin/activate" ]; then
               echo "── Creating virtual environment (first time) ──"
               cd /opt/laundry/backend
-              python3.10 -m venv .venv
+              python3 -m venv .venv
               source .venv/bin/activate
               pip install --upgrade pip --quiet
               pip install -r requirements.txt --quiet
@@ -131,11 +128,10 @@ jobs:
               echo "── Systemd service already exists, skipping ──"
             fi
 
-            # ── Create .env if not exists ──
+            # ── Warn if .env missing ──
             if [ ! -f "/opt/laundry/backend/.env" ]; then
               echo "⚠️  WARNING: /opt/laundry/backend/.env does not exist!"
-              echo "⚠️  Please create it manually on the server before the app can start."
-              echo "⚠️  See docs/aws-deployment.md for required variables."
+              echo "⚠️  Create it manually on the server before the app can start."
             else
               echo "── .env file found ──"
             fi
