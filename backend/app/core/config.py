@@ -22,7 +22,13 @@ class Config:
     # -------------------------
     # Database
     # -------------------------
-    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")
+    # Auto-convert postgresql:// → postgresql+psycopg:// for psycopg3 driver
+    _db_url = os.getenv("DATABASE_URL", "")
+    if _db_url.startswith("postgresql://"):
+        _db_url = _db_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    elif _db_url.startswith("postgres://"):
+        _db_url = _db_url.replace("postgres://", "postgresql+psycopg://", 1)
+    SQLALCHEMY_DATABASE_URI = _db_url or None
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # Redis — Phase 2 only (job queues, caching). Not needed in Phase 1.
