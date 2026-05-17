@@ -65,8 +65,11 @@ jobs:
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
       - name: First-time server setup (skipped if already done)
+        env:
+          DEPLOY_BRANCH: ${{ github.ref_name }}
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
+          ssh -i ~/.ssh/deploy_key ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+            "DEPLOY_BRANCH=$DEPLOY_BRANCH bash -s" << 'ENDSSH'
             set -e
 
             # ── Install system packages (idempotent) ──
@@ -81,19 +84,10 @@ jobs:
               echo "── Cloning repo (first time) ──"
               sudo mkdir -p /opt/laundry
               sudo chown ubuntu:ubuntu /opt/laundry
-              git clone https://github.com/arundevspace/Laundaury-App.git /opt/laundry
+              git clone -b "$DEPLOY_BRANCH" https://github.com/arundevspace/Laundaury-App.git /opt/laundry
             else
               echo "── Repo already exists, skipping clone ──"
             fi
-
-            # ── Create virtualenv (always recreate to pick up driver changes) ──
-            echo "── Creating virtual environment ──"
-            cd /opt/laundry/backend
-            rm -rf .venv
-            python3 -m venv .venv
-            source .venv/bin/activate
-            pip install --upgrade pip --quiet
-            pip install -r requirements.txt
 
             # ── Create systemd service if not exists ──
             if [ ! -f "/etc/systemd/system/laundry.service" ]; then
@@ -117,18 +111,26 @@ jobs:
           ENDSSH
 
       - name: Deploy latest code
+        env:
+          DEPLOY_BRANCH: ${{ github.ref_name }}
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
+          ssh -i ~/.ssh/deploy_key ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+            "DEPLOY_BRANCH=$DEPLOY_BRANCH bash -s" << 'ENDSSH'
             set -e
 
-            echo "── Pulling latest code ──"
+            echo "── Pulling branch: $DEPLOY_BRANCH ──"
             cd /opt/laundry
-            git pull origin main
+            git fetch origin
+            git checkout "$DEPLOY_BRANCH"
+            git pull origin "$DEPLOY_BRANCH"
 
-            echo "── Installing dependencies ──"
+            echo "── Rebuilding virtual environment ──"
             cd backend
+            rm -rf .venv
+            python3 -m venv .venv
             source .venv/bin/activate
-            pip install -r requirements.txt --quiet
+            pip install --upgrade pip --quiet
+            pip install -r requirements.txt
 
             echo "── Running DB migrations ──"
             flask db upgrade
