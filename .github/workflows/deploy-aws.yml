@@ -64,7 +64,82 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Deploy via SSH
+      - name: First-time server setup (skipped if already done)
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
+            set -e
+
+            # ── Install system packages (idempotent) ──
+            echo "── Checking system packages ──"
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq \
+              python3.10 python3.10-venv python3.10-dev \
+              libpq-dev gcc git nginx curl
+
+            # ── Clone repo if not exists ──
+            if [ ! -d "/opt/laundry/.git" ]; then
+              echo "── Cloning repo (first time) ──"
+              sudo mkdir -p /opt/laundry
+              sudo chown ubuntu:ubuntu /opt/laundry
+              git clone https://github.com/arundevspace/Laundaury-App.git /opt/laundry
+            else
+              echo "── Repo already exists, skipping clone ──"
+            fi
+
+            # ── Create virtualenv if not exists ──
+            if [ ! -f "/opt/laundry/backend/.venv/bin/activate" ]; then
+              echo "── Creating virtual environment (first time) ──"
+              cd /opt/laundry/backend
+              python3.10 -m venv .venv
+              source .venv/bin/activate
+              pip install --upgrade pip --quiet
+              pip install -r requirements.txt --quiet
+            else
+              echo "── Virtual environment already exists, skipping ──"
+            fi
+
+            # ── Create systemd service if not exists ──
+            if [ ! -f "/etc/systemd/system/laundry.service" ]; then
+              echo "── Creating systemd service (first time) ──"
+              sudo tee /etc/systemd/system/laundry.service > /dev/null << 'SERVICE'
+            [Unit]
+            Description=Laundry Management API
+            After=network.target
+
+            [Service]
+            User=ubuntu
+            WorkingDirectory=/opt/laundry/backend
+            EnvironmentFile=/opt/laundry/backend/.env
+            ExecStart=/opt/laundry/backend/.venv/bin/gunicorn \
+                      -w 4 -b 127.0.0.1:8000 \
+                      --access-logfile /var/log/laundry-access.log \
+                      --error-logfile /var/log/laundry-error.log \
+                      run:app
+            Restart=always
+            RestartSec=5
+
+            [Install]
+            WantedBy=multi-user.target
+            SERVICE
+              sudo systemctl daemon-reload
+              sudo systemctl enable laundry
+              echo "── Systemd service created ──"
+            else
+              echo "── Systemd service already exists, skipping ──"
+            fi
+
+            # ── Create .env if not exists ──
+            if [ ! -f "/opt/laundry/backend/.env" ]; then
+              echo "⚠️  WARNING: /opt/laundry/backend/.env does not exist!"
+              echo "⚠️  Please create it manually on the server before the app can start."
+              echo "⚠️  See docs/aws-deployment.md for required variables."
+            else
+              echo "── .env file found ──"
+            fi
+
+          ENDSSH
+
+      - name: Deploy latest code
         run: |
           ssh -i ~/.ssh/deploy_key ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
             set -e
